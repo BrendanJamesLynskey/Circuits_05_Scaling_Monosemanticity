@@ -1,0 +1,7 @@
+# Circuits 05 — Scaling Monosemanticity
+
+**Scaling Monosemanticity: Extracting Interpretable Features from Claude 3 Sonnet** (Templeton, Conerly, Marcus, Batson et al., **Anthropic**, May 2024) takes the sparse-autoencoder recipe proven on a toy one-layer transformer and applies it to a **real production frontier model**. The team trains sparse autoencoders on the **middle-layer residual stream of Claude 3 Sonnet**, decomposing its dense activations into a large dictionary of **interpretable features**. They train three SAEs of increasing width — roughly **1 million, 4 million, and 34 million features** — and show that **SAE training itself obeys clean scaling laws**, while even 34M features remains incomplete (dead features, missing rare concepts). The features are strikingly **abstract, multilingual, and multimodal**: one feature tracks a concept across languages and across text and images. Crucially, they find **safety-relevant features** (deception, sycophancy, bias, code backdoors, power-seeking, dangerous content, model self-representation) and prove they are **causal** via **feature steering / clamping** — the famous **"Golden Gate Claude"** demo. For an engineer, this is evidence that **interpretability scales to deployed models** and a concrete basis for **monitoring and steering** model internals, not just post-hoc explanation.
+
+**Live site:** https://brendanjameslynskey.github.io/Circuits_05_Scaling_Monosemanticity/
+
+Part of [The Transformer Circuits Thread series](https://github.com/BrendanJamesLynskey/LLM_Hub_Transformer_Circuits)

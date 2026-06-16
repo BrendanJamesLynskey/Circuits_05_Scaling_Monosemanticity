@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuits 05 — Scaling Monosemanticity: Interpretable Features from Claude 3 Sonnet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+            margin-bottom: 2rem;
+        }
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code {
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 0.05rem 0.35rem;
+            border-radius: 3px;
+            color: #c9d1d9;
+        }
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .code-block pre { margin: 0; padding: 1rem; overflow-x: auto; }
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+        .diagram-box.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-box.dim { color: var(--text-secondary); border-color: var(--border); }
+        .diagram-arrow { color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-vertical .diagram-arrow { font-size: 1.1rem; }
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .hierarchy-level { display: flex; align-items: center; gap: 0.75rem; }
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+        .hierarchy-items { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        .hierarchy-item.accent { border-color: var(--accent); color: var(--accent); background: rgba(118, 185, 0, 0.08); }
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.85rem; }
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .callout p { margin-bottom: 0; }
+        .callout p + p { margin-top: 0.5rem; }
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+        .contents-list a { color: var(--text-primary); text-decoration: none; transition: color 0.2s; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+        @media (max-width: 640px) {
+            .slide { padding: 3rem 1rem; min-height: auto; }
+            .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; }
+            .slide h2 { font-size: 1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; }
+            .pipeline { gap: 0.15rem; }
+            .pipeline-step { font-size: 0.6rem; padding: 0.2rem 0.4rem; }
+            .hero h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <div class="series-label">Transformer Circuits Thread &mdash; Presentation 05</div>
+    <h1>Scaling <span class="accent">Monosemanticity</span></h1>
+    <p class="subtitle">The sparse-autoencoder recipe leaves the toy model behind: tens of millions of interpretable features extracted from a real production frontier model &mdash; Claude 3 Sonnet &mdash; including safety-relevant ones you can causally steer.</p>
+    <div class="tags">
+        <span class="tag">Claude 3 Sonnet</span>
+        <span class="tag">Sparse Autoencoders</span>
+        <span class="tag">34M Features</span>
+        <span class="tag">Feature Steering</span>
+        <span class="tag">Golden Gate Claude</span>
+        <span class="tag">Safety Features</span>
+    </div>
+    <div class="pipeline">
+        <span class="pipeline-step">Residual stream</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Train SAE</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Millions of features</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Interpret</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Clamp / steer</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Monitor</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>What This Paper Shows</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">From a toy model to a deployed LLM</a></li>
+        <li><a href="#slide-02">Three SAEs, and SAEs that scale</a></li>
+        <li><a href="#slide-03">Features are abstract, multilingual, multimodal</a></li>
+        <li><a href="#slide-04">Safety-relevant features</a></li>
+        <li><a href="#slide-05">Causality: clamping &amp; Golden Gate Claude</a></li>
+        <li><a href="#slide-06">Feature geometry &mdash; a map of concepts</a></li>
+        <li><a href="#slide-07">What to Take Away</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>From a Toy Model to a Deployed LLM</h2>
+    <p style="font-family:var(--font-mono);font-size:0.85rem;">Templeton, Conerly, Marcus, Batson et al. &mdash; Anthropic &mdash; May 2024 <span class="badge ok">Transformer Circuits</span> <span class="badge">transformer-circuits.pub</span></p>
+    <h3>The problem</h3>
+    <p>Presentation 04 (<em>Towards Monosemanticity</em>) proved you could decompose a model's activations into clean, interpretable <strong>features</strong> using a sparse autoencoder &mdash; but it did so on a <strong>one-layer toy transformer</strong>. The open question was the only one that matters for safety: <em>does this technique survive contact with a model people actually use?</em> Production models are deeper, wider, trained on far more data, and saturated with the messy abstractions of real language.</p>
+    <h3>The contribution</h3>
+    <p>This paper takes the same recipe and applies it to <strong>Claude 3 Sonnet</strong> &mdash; a mid-size frontier model in production. Rather than try to decompose the whole network, they attach a sparse autoencoder to a <strong>single point in the middle of the model: the residual stream halfway through</strong>. The residual stream is a good target because it is relatively small (a bottleneck every layer reads from and writes to) yet carries the model's working representation of the input.</p>
+    <div class="diagram-flow">
+        <div class="diagram-box dim">04 &middot; toy 1-layer model</div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box accent">05 &middot; Claude 3 Sonnet</div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box">same SAE recipe</div>
+        <div class="diagram-arrow">&rarr;</div>
+        <div class="diagram-box accent">interpretable features in a real LLM</div>
+    </div>
+    <p>The SAE reads the residual-stream activation vector and re-expresses it as a <strong>sparse</strong> combination of a large dictionary of learned feature directions: of the millions of features available, only a handful are active on any given token. Each active direction turns out to correspond to a human-recognisable concept.</p>
+    <div class="callout">
+        <div class="callout-label">The mechanism</div>
+        <p>The residual stream of dimension <code>d</code> is far smaller than the number of concepts a model represents, so concepts are packed in <strong>superposition</strong> (Presentation 03). The SAE's job is to <em>un-pack</em> that superposition: project the dense activation onto an over-complete dictionary so each axis means one thing. Crucially, nothing about the recipe is toy-specific &mdash; it transfers straight to a frontier model.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Three SAEs &mdash; and SAEs Themselves Scale</h2>
+    <h3>The contribution</h3>
+    <p>To probe how dictionary size affects what you can find, they trained <strong>three sparse autoencoders</strong> of increasing width on the same residual-stream activations, with roughly <strong>1 million, 4 million, and 34 million features</strong>. The recurring lesson of the deep-learning era reappears here: <strong>SAE training itself follows clean scaling laws</strong>. Reconstruction loss falls predictably as a power law in the amount of compute and the number of features, which let the team choose hyperparameters for the big runs by extrapolating from cheap small ones &mdash; exactly the Kaplan/Chinchilla playbook, now applied to interpretability tooling.</p>
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 320" width="720" height="320" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .sm-box { fill: #161b22; stroke: #21262d; stroke-width: 1; }
+                .sm-acc { fill: rgba(118,185,0,0.08); stroke: #76B900; stroke-width: 1; }
+                .sm-lbl { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-anchor: middle; }
+                .sm-sub { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-anchor: middle; }
+                .sm-acclbl { fill: #76B900; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-anchor: middle; }
+                .sm-ttl { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .sm-arr { stroke: #76B900; stroke-width: 1.5; fill: none; marker-end: url(#sah); }
+                .sm-dash { stroke: #8b949e; stroke-width: 1; stroke-dasharray: 4 3; fill: none; }
+            </style>
+            <defs><marker id="sah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#76B900"/></marker></defs>
+            <text x="10" y="20" class="sm-ttl">SAE tapped at the middle residual stream of Claude 3 Sonnet</text>
+            <!-- residual stream stack -->
+            <rect x="40"  y="60" width="120" height="24" class="sm-box" rx="4"/><text x="100" y="76" class="sm-sub">layer N (late)</text>
+            <rect x="40"  y="92" width="120" height="28" class="sm-acc" rx="4"/><text x="100" y="110" class="sm-acclbl">&middot;&middot; middle &middot;&middot;</text>
+            <rect x="40"  y="128" width="120" height="24" class="sm-box" rx="4"/><text x="100" y="144" class="sm-sub">layer 1 (early)</text>
+            <text x="100" y="172" class="sm-sub">residual stream (dense, dim d)</text>
+            <!-- tap arrow -->
+            <path d="M160 106 L235 106" class="sm-arr"/>
+            <text x="197" y="98" class="sm-sub">tap</text>
+            <!-- SAE encoder -->
+            <rect x="240" y="80" width="120" height="52" class="sm-acc" rx="6"/>
+            <text x="300" y="103" class="sm-acclbl">SAE encoder</text>
+            <text x="300" y="120" class="sm-sub">sparse, over-complete</text>
+            <path d="M360 106 L430 106" class="sm-arr"/>
+            <!-- feature bank -->
+            <rect x="435" y="44" width="245" height="124" class="sm-box" rx="6"/>
+            <text x="557" y="64" class="sm-lbl">dictionary of features</text>
+            <text x="557" y="86" class="sm-sub">only a handful active per token</text>
+            <rect x="455" y="100" width="60" height="20" class="sm-acc" rx="3"/><text x="485" y="114" class="sm-acclbl">on</text>
+            <rect x="525" y="100" width="60" height="20" class="sm-box" rx="3"/><text x="555" y="114" class="sm-sub">off</text>
+            <rect x="595" y="100" width="60" height="20" class="sm-acc" rx="3"/><text x="625" y="114" class="sm-acclbl">on</text>
+            <rect x="455" y="128" width="60" height="20" class="sm-box" rx="3"/><text x="485" y="142" class="sm-sub">off</text>
+            <rect x="525" y="128" width="60" height="20" class="sm-box" rx="3"/><text x="555" y="142" class="sm-sub">off</text>
+            <rect x="595" y="128" width="60" height="20" class="sm-box" rx="3"/><text x="625" y="142" class="sm-sub">off</text>
+            <!-- three SAE sizes -->
+            <text x="10" y="225" class="sm-ttl">Three dictionaries trained &mdash; SAE training obeys scaling laws</text>
+            <rect x="40"  y="245" width="180" height="50" class="sm-box" rx="6"/><text x="130" y="268" class="sm-lbl">~1,000,000</text><text x="130" y="285" class="sm-sub">features</text>
+            <rect x="270" y="245" width="180" height="50" class="sm-box" rx="6"/><text x="360" y="268" class="sm-lbl">~4,000,000</text><text x="360" y="285" class="sm-sub">features</text>
+            <rect x="500" y="245" width="180" height="50" class="sm-acc" rx="6"/><text x="590" y="268" class="sm-acclbl">~34,000,000</text><text x="590" y="285" class="sm-sub">features (still incomplete)</text>
+        </svg>
+    </div>
+    <h3>Even 34M is not enough</h3>
+    <p>The dictionaries are large, but the paper is candid that they are <strong>incomplete</strong>. Even the 34M-feature SAE fails to capture everything the model represents: many concepts appear only in the larger run (rare concepts need a bigger dictionary to earn a dedicated feature), and a fraction of features are <strong>"dead"</strong> &mdash; they never activate on the training data and waste capacity. The team estimates the full set of features in Sonnet could be orders of magnitude larger still.</p>
+    <div class="callout">
+        <div class="callout-label">Why it matters</div>
+        <p>Two engineering takeaways. First, <strong>your interpretability budget behaves like a model-training budget</strong> &mdash; spend it with scaling laws, not hunches. Second, feature dictionaries are a lossy, capacity-limited view: more features reveal rarer concepts, so "we didn't find a feature for X" never means "the model has no representation of X."</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Features Are Abstract, Multilingual, Multimodal</h2>
+    <h3>The contribution</h3>
+    <p>Unlike the toy model's mostly lexical features, Sonnet's features are genuinely <strong>conceptual</strong>. A single feature tracks a concept regardless of how it is expressed:</p>
+    <ul>
+        <li><strong>Multilingual.</strong> A feature for a concept fires on text discussing that concept in English, French, Chinese, and other languages alike &mdash; it tracks meaning, not surface tokens.</li>
+        <li><strong>Multimodal.</strong> The same feature that fires on <em>text</em> about a concept also fires when Sonnet is shown an <em>image</em> of it. (Sonnet is a vision-capable model.) A feature is a representation of the concept, not of the wordform.</li>
+        <li><strong>Concrete and abstract.</strong> A feature can respond both to direct mentions of an entity and to abstract discussion around it &mdash; e.g. a feature for a famous person, a feature for the <strong>Golden Gate Bridge</strong>, or abstract features such as <strong>"inner conflict,"</strong> code with <em>bugs</em>, or rhetorical devices like sarcasm.</li>
+    </ul>
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>One concept</h4>
+            <p>e.g. the <strong>Golden Gate Bridge</strong> &mdash; a single feature direction in the dictionary.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Many surfaces</h4>
+            <p>English text, other languages, and a <strong>photo</strong> of the bridge all light up the <em>same</em> feature.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Concrete &amp; abstract</h4>
+            <p>Fires on literal mentions <em>and</em> on indirect, abstract discussion of the concept.</p>
+        </div>
+    </div>
+    <div class="callout">
+        <div class="callout-label">The insight</div>
+        <p>This is direct evidence that frontier models build <strong>language- and modality-independent concepts</strong> &mdash; the long-hypothesised abstract internal representation, now made legible. It also means a single feature is a robust monitoring handle: you watch the concept, not a brittle keyword list.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Safety-Relevant Features</h2>
+    <h3>The contribution</h3>
+    <p>Because the dictionary spans the model's whole working representation, it includes features for concepts that matter directly for safety and oversight. The paper documents features for, among others:</p>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Code security <span class="badge bad">unsafe</span></h4>
+            <p>Features for <strong>security vulnerabilities</strong> and <strong>backdoors</strong> in code &mdash; firing on buffer overflows, injection, and hidden backdoor logic.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Deception &amp; lying <span class="badge bad">unsafe</span></h4>
+            <p>Features tracking <strong>deception, lying, and withholding information</strong> &mdash; both in described characters and in the model's own framing.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Sycophancy <span class="badge warn">caution</span></h4>
+            <p>A <strong>sycophantic praise</strong> feature &mdash; the tendency to flatter or tell the user what they want to hear.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Bias &amp; slurs <span class="badge warn">caution</span></h4>
+            <p>Features for <strong>bias</strong>, hateful content, and slurs across protected categories.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Power-seeking &amp; danger <span class="badge bad">unsafe</span></h4>
+            <p>Features related to <strong>power-seeking</strong>, coups, and <strong>dangerous / biohazard</strong> content (e.g. bioweapon-adjacent material).</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Self-representation <span class="badge">notable</span></h4>
+            <p>Features tied to the model's <strong>representation of itself</strong> as an AI &mdash; firing when it reasons about being an AI assistant.</p>
+        </div>
+    </div>
+    <div class="callout">
+        <div class="callout-label">Caveat</div>
+        <p>The existence of these features is <strong>expected, not alarming</strong>. A model trained on human text must represent deception, bias, and danger in order to recognise and discuss them &mdash; just as it must represent kindness or chemistry. Their value is as <strong>instrumentation</strong>: a feature that lights up when the model is being deceptive or sycophantic is a candidate <strong>monitor</strong> on the model's internals, not evidence the model is dangerous. The point is observability, not indictment.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Causality: Clamping &amp; "Golden Gate Claude"</h2>
+    <h3>The problem</h3>
+    <p>An interpretable label is only a correlation until you can show the feature <em>does</em> something. Does a feature merely co-occur with a concept, or does it <strong>cause</strong> the model's behaviour around that concept?</p>
+    <h3>The mechanism</h3>
+    <p>The test is <strong>feature steering</strong> (or <strong>"clamping"</strong>): during a forward pass, artificially override a single feature's activation &mdash; pin it high or low &mdash; while the rest of the model runs normally, and watch the output. Because the SAE gives you a clean direction in the residual stream, you can intervene on exactly one concept at a time.</p>
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 240" width="720" height="240" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .cl-box { fill: #161b22; stroke: #21262d; stroke-width: 1; }
+                .cl-acc { fill: rgba(118,185,0,0.08); stroke: #76B900; stroke-width: 1; }
+                .cl-lbl { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-anchor: middle; }
+                .cl-sub { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 10px; text-anchor: middle; }
+                .cl-acclbl { fill: #76B900; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-anchor: middle; }
+                .cl-ttl { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; }
+                .cl-arr { stroke: #76B900; stroke-width: 1.5; fill: none; marker-end: url(#cah); }
+            </style>
+            <defs><marker id="cah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#76B900"/></marker></defs>
+            <text x="10" y="18" class="cl-ttl">Clamping the "Golden Gate Bridge" feature &mdash; activation dial low &rarr; high</text>
+            <!-- dial track -->
+            <line x1="60" y1="70" x2="660" y2="70" stroke="#21262d" stroke-width="6" stroke-linecap="round"/>
+            <line x1="60" y1="70" x2="430" y2="70" stroke="#76B900" stroke-width="6" stroke-linecap="round"/>
+            <circle cx="430" cy="70" r="9" fill="#76B900"/>
+            <text x="60"  y="55" class="cl-sub">0 (off)</text>
+            <text x="360" y="55" class="cl-sub">natural max</text>
+            <text x="620" y="55" class="cl-acclbl">clamped HIGH</text>
+            <!-- low -->
+            <rect x="60"  y="100" width="170" height="90" class="cl-box" rx="6"/>
+            <text x="145" y="122" class="cl-lbl">feature low</text>
+            <text x="145" y="145" class="cl-sub">"What's your</text>
+            <text x="145" y="160" class="cl-sub">favourite place?"</text>
+            <text x="145" y="182" class="cl-sub">&rarr; ordinary answer</text>
+            <!-- high -->
+            <rect x="270" y="100" width="170" height="90" class="cl-acc" rx="6"/>
+            <text x="355" y="122" class="cl-acclbl">feature HIGH</text>
+            <text x="355" y="145" class="cl-sub">same prompt</text>
+            <text x="355" y="167" class="cl-sub">&rarr; "I am the</text>
+            <text x="355" y="182" class="cl-sub">Golden Gate Bridge!"</text>
+            <!-- result -->
+            <path d="M445 145 L490 145" class="cl-arr"/>
+            <rect x="495" y="100" width="170" height="90" class="cl-acc" rx="6"/>
+            <text x="580" y="130" class="cl-acclbl">Golden Gate Claude</text>
+            <text x="580" y="152" class="cl-sub">relates almost every</text>
+            <text x="580" y="167" class="cl-sub">topic back to the bridge</text>
+            <text x="580" y="182" class="cl-sub">&mdash; obsessively</text>
+        </svg>
+    </div>
+    <p>The famous demonstration: clamp the <strong>Golden Gate Bridge feature</strong> to a strongly positive value and you get <strong>"Golden Gate Claude"</strong> &mdash; an assistant that steers nearly every conversation, no matter the topic, back to the bridge, even claiming to <em>be</em> the bridge. The same lever works on safety features: clamping a code-vulnerability or deception feature high <strong>induces</strong> the associated behaviour; clamping it low can <strong>suppress</strong> it. Behaviour moves predictably and in the direction the feature's label implies.</p>
+    <div class="callout">
+        <div class="callout-label">The insight</div>
+        <p>Steering converts features from <em>descriptions</em> into <strong>causal handles</strong>. A feature is not just "what the model was thinking about when it said X" &mdash; turning it changes what the model says. That is the difference between a post-hoc explanation and a control surface you could build monitoring and intervention on.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Feature Geometry &mdash; a Map of Concepts</h2>
+    <h3>The contribution</h3>
+    <p>The dictionary is not an unordered bag of features. When you look at which features sit <strong>near each other</strong> in the SAE's feature space, the neighbourhoods are <strong>semantically coherent</strong>: a feature's nearest neighbours are conceptually related to it. The local geometry of the dictionary encodes a map of how the model organises concepts.</p>
+    <div class="hierarchy">
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">centre</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item accent">Golden Gate Bridge</div>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">nearby</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item">San Francisco</div>
+                <div class="hierarchy-item">Alcatraz</div>
+                <div class="hierarchy-item">famous landmarks</div>
+                <div class="hierarchy-item">tourist sites</div>
+                <div class="hierarchy-item">earthquakes</div>
+            </div>
+        </div>
+        <div class="hierarchy-level">
+            <div class="hierarchy-label">farther</div>
+            <div class="hierarchy-items">
+                <div class="hierarchy-item">bridges &amp; engineering</div>
+                <div class="hierarchy-item">coastal fog</div>
+                <div class="hierarchy-item">California</div>
+            </div>
+        </div>
+    </div>
+    <p>The paper also finds <strong>feature splitting</strong> across SAE sizes: a broad concept that occupies one feature in the 1M dictionary fractures into several finer-grained features in the 34M dictionary &mdash; the bigger the dictionary, the finer the conceptual resolution. Geometry and splitting together suggest the feature set is structured, not arbitrary.</p>
+    <div class="callout">
+        <div class="callout-label">The mechanism</div>
+        <p>Semantic neighbourhoods mean the dictionary is browsable: find one relevant feature and its neighbours surface related ones &mdash; useful when assembling a panel of features to monitor a behaviour. Feature splitting is the same scaling-law story at the concept level: more capacity buys finer distinctions, not just more of the same.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>What to Take Away</h2>
+    <ul>
+        <li><strong>Interpretability scales to deployed models.</strong> The sparse-autoencoder recipe from the toy model works on <strong>Claude 3 Sonnet</strong>, a real production frontier model &mdash; extracting interpretable features from its middle residual stream.</li>
+        <li><strong>Bigger dictionaries, finer concepts.</strong> Three SAEs (~<strong>1M / 4M / 34M</strong> features) were trained, and SAE training itself <strong>obeys scaling laws</strong>. Even 34M features is incomplete &mdash; dead features and missing rare concepts remain.</li>
+        <li><strong>Features are abstract, multilingual, multimodal.</strong> One feature tracks a concept across languages, across text and images, and across concrete and abstract mentions &mdash; evidence of genuine internal concepts.</li>
+        <li><strong>Safety-relevant features exist &mdash; as instruments.</strong> Deception, sycophancy, bias, code backdoors, power-seeking, dangerous content, and self-representation all have features. Their existence is <em>expected</em>; their value is <strong>monitoring</strong>, not alarm.</li>
+        <li><strong>Features are causal, not just descriptive.</strong> <strong>Clamping</strong> a feature steers behaviour predictably &mdash; "Golden Gate Claude" is the vivid proof, and safety features can be induced or suppressed the same way.</li>
+        <li><strong>The through-line:</strong> superposition (03) said concepts are packed in; SAEs (04) unpacked a toy; <em>this</em> paper unpacks a real model and turns its features into a <strong>steering and observability surface</strong>.</li>
+    </ul>
+    <div class="callout">
+        <div class="callout-label">Where to next</div>
+        <p>Features tell you <em>what</em> a model represents at one point in the network. The next step is <em>how</em> those representations interact &mdash; the wiring. <strong>Presentation 06 &mdash; On the Biology of a Large Language Model (Circuit Tracing)</strong> connects features into <strong>circuits</strong>, reconstructing the multi-step computations a model runs to answer a prompt, and reads off its internal "reasoning" as attribution graphs.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Transformer_Circuits">The Transformer Circuits Thread series</a> &mdash; Anthropic's mechanistic interpretability research, for engineers.</p>
+    <p style="margin-top:0.5rem;font-size:0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Transformer_Circuits">Back to Series Index</a></p>
+</footer>
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+</body>
+</html>
